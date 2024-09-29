@@ -7,49 +7,58 @@ import {
   arrayUnion,
   arrayRemove,
   getDoc,
+  addDoc,
+  collection,
 } from "firebase/firestore";
 import { Signaling } from "./signaling";
 
 export class FirebaseSignaling implements Signaling {
-  listenForOffer(
-    conferenceId: string,
-    onOffer: (offer: RTCSessionDescriptionInit) => void
-  ): void {
-    const callDoc = doc(firestore, "calls", conferenceId);
-    onSnapshot(callDoc, (snapshot) => {
-      const data = snapshot.data();
-      if (data?.offer) onOffer(data.offer);
-    });
+  getCallDoc(conferenceId: string) {
+    return doc(firestore, "calls", conferenceId);
   }
 
-  listenForAnswer(
+  getOfferCandidates(conferenceId: string) {
+    const callDoc = doc(firestore, "calls", conferenceId);
+    return collection(callDoc, "offerCandidates");
+  }
+
+  getAnswerCandidates(conferenceId: string) {
+    const callDoc = doc(firestore, "calls", conferenceId);
+    return collection(callDoc, "answerCandidates");
+  }
+
+  listenForSessionDescription(
     conferenceId: string,
+    onOffer: (offer: RTCSessionDescriptionInit) => void,
     onAnswer: (answer: RTCSessionDescriptionInit) => void
   ): void {
     const callDoc = doc(firestore, "calls", conferenceId);
     onSnapshot(callDoc, (snapshot) => {
       const data = snapshot.data();
-      if (data?.answer) onAnswer(data.answer);
+      if (data?.offer) {
+        onOffer(data.offer);
+      }
+      if (data?.answer) {
+        onAnswer(data.answer);
+      }
     });
   }
 
-  listenForIceCandidates(
+  async listenForIceCandidates(
     conferenceId: string,
     onCandidate: (candidate: RTCIceCandidateInit) => void
-  ): void {
-    const callDoc = doc(firestore, "calls", conferenceId);
-    onSnapshot(callDoc, (snapshot) => {
-      const data = snapshot.data();
-      if (data?.offerCandidates) {
-        data.offerCandidates.forEach((candidate: RTCIceCandidateInit) =>
-          onCandidate(candidate)
-        );
-      }
-      if (data?.answerCandidates) {
-        data.answerCandidates.forEach((candidate: RTCIceCandidateInit) =>
-          onCandidate(candidate)
-        );
-      }
+  ): Promise<void> {
+    const callDoc = await getDoc(this.getCallDoc(conferenceId));
+    const candidateType =
+      callDoc?.data()?.type !== "offer"
+        ? this.getAnswerCandidates(conferenceId)
+        : this.getOfferCandidates(conferenceId);
+    onSnapshot(candidateType, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "added") {
+          onCandidate(change.doc.data() as RTCIceCandidateInit);
+        }
+      });
     });
   }
 
@@ -58,7 +67,7 @@ export class FirebaseSignaling implements Signaling {
     offer: RTCSessionDescriptionInit
   ): Promise<void> {
     const callDoc = doc(firestore, "calls", conferenceId);
-    await updateDoc(callDoc, { offer });
+    await updateDoc(callDoc, { offer, type: "offer" });
   }
 
   async sendAnswer(
@@ -66,17 +75,41 @@ export class FirebaseSignaling implements Signaling {
     answer: RTCSessionDescriptionInit
   ): Promise<void> {
     const callDoc = doc(firestore, "calls", conferenceId);
-    await updateDoc(callDoc, { answer });
+    await updateDoc(callDoc, { answer, type: "answer" });
+  }
+
+  async isOffer(conferenceId: string): Promise<boolean> {
+    const callDoc = doc(firestore, "calls", conferenceId);
+    const snapshot = await getDoc(callDoc);
+    const data = snapshot.data();
+    return data?.type === "offer";
+  }
+
+  async isWaiting(conferenceId: string): Promise<boolean> {
+    const callDoc = doc(firestore, "calls", conferenceId);
+    const snapshot = await getDoc(callDoc);
+    const data = snapshot.data();
+    return data?.type === "created";
+  }
+
+  async isAnswer(conferenceId: string): Promise<boolean> {
+    const callDoc = doc(firestore, "calls", conferenceId);
+    const snapshot = await getDoc(callDoc);
+    const data = snapshot.data();
+    return data?.type === "answer";
   }
 
   async sendIceCandidate(
     conferenceId: string,
-    candidate: RTCIceCandidateInit,
-    isAnswer: boolean
+    candidate: RTCIceCandidateInit
   ): Promise<void> {
-    const callDoc = doc(firestore, "calls", conferenceId);
-    const field = isAnswer ? "answerCandidates" : "offerCandidates";
-    await updateDoc(callDoc, { [field]: arrayUnion(candidate) });
+    const callDoc = await getDoc(this.getCallDoc(conferenceId));
+    const candidateType =
+      callDoc?.data()?.type !== "offer"
+        ? this.getAnswerCandidates(conferenceId)
+        : this.getOfferCandidates(conferenceId);
+
+    await addDoc(candidateType, candidate);
   }
 
   async addParticipant(
@@ -87,6 +120,13 @@ export class FirebaseSignaling implements Signaling {
     await updateDoc(callDoc, {
       participants: arrayUnion(participantId),
     });
+  }
+
+  async getParticipants(conferenceId: string): Promise<string[]> {
+    const callDoc = doc(firestore, "calls", conferenceId);
+    const snapshot = await getDoc(callDoc);
+    const data = snapshot.data();
+    return data?.participants || [];
   }
 
   async removeParticipant(
@@ -119,5 +159,19 @@ export class FirebaseSignaling implements Signaling {
   async removeIceCandidates(conferenceId: string): Promise<void> {
     const callDoc = doc(firestore, "calls", conferenceId);
     await updateDoc(callDoc, { offerCandidates: [], answerCandidates: [] });
+  }
+
+  async getOffer(conferenceId: string): Promise<RTCSessionDescriptionInit> {
+    const callDoc = doc(firestore, "calls", conferenceId);
+    const snapshot = await getDoc(callDoc);
+    const data = snapshot.data();
+    return data?.offer;
+  }
+
+  async getAnswer(conferenceId: string): Promise<RTCSessionDescriptionInit> {
+    const callDoc = doc(firestore, "calls", conferenceId);
+    const snapshot = await getDoc(callDoc);
+    const data = snapshot.data();
+    return data?.answer;
   }
 }

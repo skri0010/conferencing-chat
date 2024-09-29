@@ -22,8 +22,7 @@ export default function Home() {
       await setDoc(callDoc, {
         offer: null,
         answer: null,
-        offerCandidates: [],
-        answerCandidates: [],
+        type: "created",
       });
 
       // Redirect to the video call page with the conferenceId

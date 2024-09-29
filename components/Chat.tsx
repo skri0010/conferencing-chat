@@ -41,11 +41,11 @@ const Chat = () => {
   }, [messages]);
 
   return (
-    <div className="bg-card rounded-lg shadow-lg overflow-hidden flex flex-col bg-slate-900 text-white">
+    <div className="bg-card rounded-lg shadow-lg overflow-hidden flex flex-col bg-slate-900 text-white h-full">
       <div className="p-4 border-b border-slate-700">
         <h2 className="text-lg font-semibold">Chat</h2>
       </div>
-      <div className="flex-grow p-4 lg:min-h-44">
+      <div className="flex-grow p-4 min-h-44">
         {messages.map((message) => (
           <div key={message} className={`mb-4`}>
             <span>{message}</span>
