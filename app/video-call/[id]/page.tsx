@@ -19,17 +19,35 @@ const VideoCall = () => {
   const peerConnection = useRef<RTCPeerConnection | null>(null);
 
   const ICE_SERVERS = [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-    { urls: "stun:stun2.l.google.com:19302" },
-    { urls: "stun:stun3.l.google.com:19302" },
-    { urls: "stun:stun4.l.google.com:19302" },
-    // Add TURN servers here if available
+    {
+      urls: "stun:stun.relay.metered.ca:80",
+    },
+    {
+      urls: "turn:global.relay.metered.ca:80",
+      username: "b0e07cdbd000e5aa7b547bf0",
+      credential: "bXC9XyogFAsUZzJB",
+    },
+    {
+      urls: "turn:global.relay.metered.ca:80?transport=tcp",
+      username: "b0e07cdbd000e5aa7b547bf0",
+      credential: "bXC9XyogFAsUZzJB",
+    },
+    {
+      urls: "turn:global.relay.metered.ca:443",
+      username: "b0e07cdbd000e5aa7b547bf0",
+      credential: "bXC9XyogFAsUZzJB",
+    },
+    {
+      urls: "turns:global.relay.metered.ca:443?transport=tcp",
+      username: "b0e07cdbd000e5aa7b547bf0",
+      credential: "bXC9XyogFAsUZzJB",
+    },
   ];
 
   const [connected, setConnected] = useState<boolean>(false);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<string>("New");
+  // const [isOfferer, setIsOfferer] = useState<boolean>(false);
 
   const [videoOptions, setVideoOptions] = useState<{ [key: string]: boolean }>({
     videoEnabled: true,
@@ -43,19 +61,23 @@ const VideoCall = () => {
     }
   }, [remoteStream]);
 
-  const createPeerConnection = () => {
+  const createPeerConnection = async () => {
+    const participantCount = await signaling.getParticipantCount(conferenceId);
+
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
     pc.ontrack = (event) => {
       console.log("Received remote track", event.track.kind);
       setRemoteStream(event.streams[0]);
+      console.log("Remote stream set", event.streams[0]);
     };
 
     pc.onicecandidate = async (event) => {
       if (event.candidate) {
         await signaling.sendIceCandidate(
           conferenceId,
-          event.candidate.toJSON()
+          event.candidate.toJSON(),
+          participantCount === 0 ? "offer" : "answer"
         );
       }
     };
@@ -88,7 +110,7 @@ const VideoCall = () => {
     if (peerConnection.current) {
       peerConnection.current.close();
     }
-    peerConnection.current = createPeerConnection();
+    peerConnection.current = await createPeerConnection();
     await setUpVideoFeeds();
     await startVideoCall();
   };
@@ -98,11 +120,12 @@ const VideoCall = () => {
       const participantCount = await signaling.getParticipantCount(
         conferenceId
       );
+
       if (!peerConnection.current) {
-        peerConnection.current = createPeerConnection();
+        peerConnection.current = await createPeerConnection();
         await setUpVideoFeeds();
       }
-      await addListeners(participantCount);
+      await addListeners();
       await signaling.addParticipant(conferenceId, participantId.current);
 
       if (participantCount === 0) {
@@ -134,6 +157,17 @@ const VideoCall = () => {
     await peerConnection.current.setRemoteDescription(
       new RTCSessionDescription(offer)
     );
+
+    const bufferedCandidates = await signaling.getBufferedIceCandidates(
+      conferenceId
+    );
+    for (const candidateId in bufferedCandidates) {
+      const candidate = bufferedCandidates[candidateId];
+      await peerConnection.current.addIceCandidate(
+        new RTCIceCandidate(candidate)
+      );
+    }
+
     const answer = await peerConnection.current.createAnswer();
     await peerConnection.current.setLocalDescription(answer);
     await signaling.sendAnswer(conferenceId, {
@@ -142,19 +176,19 @@ const VideoCall = () => {
     });
   };
 
-  const addListeners = async (participantCount: number) => {
+  const addListeners = async () => {
     if (!peerConnection.current) return;
+    const participantCount = await signaling.getParticipantCount(conferenceId);
 
-    const iceCandidates: RTCIceCandidate[] = [];
-
-    signaling.listenForIceCandidates(conferenceId, (candidate) => {
-      const iceCandidate = new RTCIceCandidate(candidate);
-      if (peerConnection.current?.remoteDescription) {
-        peerConnection.current.addIceCandidate(iceCandidate);
-      } else {
-        iceCandidates.push(iceCandidate);
-      }
-    });
+    signaling.listenForIceCandidates(
+      conferenceId,
+      (candidate) => {
+        const iceCandidate = new RTCIceCandidate(candidate);
+        if (peerConnection.current?.currentRemoteDescription)
+          peerConnection.current?.addIceCandidate(iceCandidate);
+      },
+      participantCount === 0 ? "offer" : "answer"
+    );
 
     if (participantCount === 0) {
       signaling.listenForSessionDescription(
@@ -170,9 +204,6 @@ const VideoCall = () => {
           ) {
             await peerConnection.current.setRemoteDescription(
               new RTCSessionDescription(answer)
-            );
-            iceCandidates.forEach((candidate) =>
-              peerConnection.current?.addIceCandidate(candidate)
             );
           }
           console.log("Connection established.");
@@ -282,7 +313,7 @@ const VideoCall = () => {
               ref={remoteVideoRef}
               autoPlay
               playsInline
-              className="w-80 flex-shrink-0 rounded-md transform scale-x-[-1]"
+              className="w-80 flex-shrink-0 rounded-md transform scale-x-[-1] border border-purple-100"
             ></video>
           </div>
           <div className="flex justify-center space-x-3 mb-2">

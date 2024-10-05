@@ -9,6 +9,7 @@ import {
   getDoc,
   addDoc,
   collection,
+  getDocs,
 } from "firebase/firestore";
 import { Signaling } from "./signaling";
 
@@ -46,20 +47,27 @@ export class FirebaseSignaling implements Signaling {
 
   async listenForIceCandidates(
     conferenceId: string,
-    onCandidate: (candidate: RTCIceCandidateInit) => void
+    onCandidate: (candidate: RTCIceCandidateInit) => void,
+    role: "offer" | "answer"
   ): Promise<void> {
-    const callDoc = await getDoc(this.getCallDoc(conferenceId));
     const candidateType =
-      callDoc?.data()?.type !== "offer"
+      role === "offer"
         ? this.getAnswerCandidates(conferenceId)
         : this.getOfferCandidates(conferenceId);
+
+    // Listen for new candidates
     onSnapshot(candidateType, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         if (change.type === "added") {
-          onCandidate(change.doc.data() as RTCIceCandidateInit);
+          onCandidate(change.doc.data() as RTCIceCandidateInit); // Add new candidates
         }
       });
     });
+  }
+
+  async getBufferedIceCandidates(conferenceId: string) {
+    const offerCandidates = this.getOfferCandidates(conferenceId);
+    return (await getDocs(offerCandidates)).docs.map((doc) => doc.data());
   }
 
   async sendOffer(
@@ -101,11 +109,12 @@ export class FirebaseSignaling implements Signaling {
 
   async sendIceCandidate(
     conferenceId: string,
-    candidate: RTCIceCandidateInit
+    candidate: RTCIceCandidateInit,
+    role: "offer" | "answer"
   ): Promise<void> {
-    const callDoc = await getDoc(this.getCallDoc(conferenceId));
+    console.log("Role", role);
     const candidateType =
-      callDoc?.data()?.type !== "offer"
+      role !== "offer"
         ? this.getAnswerCandidates(conferenceId)
         : this.getOfferCandidates(conferenceId);
 

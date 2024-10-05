@@ -7,7 +7,8 @@ export interface Signaling {
   ): void;
   listenForIceCandidates(
     conferenceId: string,
-    onCandidate: (candidate: RTCIceCandidateInit) => void
+    onCandidate: (candidate: RTCIceCandidateInit) => void,
+    role: "offer" | "answer"
   ): void;
   sendOffer(
     conferenceId: string,
@@ -23,7 +24,8 @@ export interface Signaling {
   isWaiting(conferenceId: string): Promise<boolean>;
   sendIceCandidate(
     conferenceId: string,
-    candidate: RTCIceCandidateInit
+    candidate: RTCIceCandidateInit,
+    role: "offer" | "answer"
   ): Promise<void>;
   removeIceCandidates(conferenceId: string): Promise<void>;
   addParticipant(conferenceId: string, participantId: string): Promise<void>;
