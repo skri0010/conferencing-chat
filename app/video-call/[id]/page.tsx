@@ -22,6 +22,11 @@ const VideoCall = () => {
     {
       urls: "stun:stun.relay.metered.ca:80",
     },
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun3.l.google.com:19302" },
+    { urls: "stun:stun4.l.google.com:19302" },
     {
       urls: "turn:global.relay.metered.ca:80",
       username: "b0e07cdbd000e5aa7b547bf0",
@@ -41,6 +46,11 @@ const VideoCall = () => {
       urls: "turns:global.relay.metered.ca:443?transport=tcp",
       username: "b0e07cdbd000e5aa7b547bf0",
       credential: "bXC9XyogFAsUZzJB",
+    },
+    {
+      urls: "turn:relay1.expressturn.com:3478",
+      username: "efWQ2IFY44Y2AKGB8H",
+      credential: "xJxLKAYwJ0PUB8x2",
     },
   ];
 
