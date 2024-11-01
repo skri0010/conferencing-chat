@@ -1,6 +1,4 @@
 "use client";
-
-import { useRef, useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import Chat from "@/components/Chat";
